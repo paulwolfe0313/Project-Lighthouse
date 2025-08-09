@@ -7,6 +7,9 @@ docker compose up -d --build
 echo "⏳ Waiting for Laravel container to start..."
 sleep 5
 
+echo "📦 Installing PHP dependencies..."
+docker compose exec api composer install
+
 # Only copy .env if it doesn't exist
 docker compose exec api bash -c "
   if [ ! -f .env ]; then
