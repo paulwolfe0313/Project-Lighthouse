@@ -1,6 +1,6 @@
 // src/pages/GeneralDashboard.jsx
 import React from 'react';
-import DashboardLayout from '../layouts/DashboardLayout';
+import DashboardLayout from '@/layouts/DashboardLayout';
 
 const GeneralDashboard = () => {
   return (

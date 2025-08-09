@@ -1,49 +1,82 @@
-services:
-  frontend:
-    build:
-      context: ./frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - ./frontend/node_modules:/app/node_modules  # Bind host node_modules
-    working_dir: /app
-    command: ["npm", "run", "dev", "--", "--host"]
-    depends_on:
-      - api
+version: '3.8'
 
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    container_name: lighthouse_db
+    environment:
+      POSTGRES_DB: lighthouse
+      POSTGRES_USER: lighthouse_user
+      POSTGRES_PASSWORD: lighthouse_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lighthouse_user -d lighthouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Laravel API
   api:
     build:
       context: ./api
-    ports:
-      - "8000:8000"
+      dockerfile: Dockerfile
+    container_name: lighthouse_api
+    env_file:
+      - ./api/.env
+    environment:
+      # Override Docker-specific variables
+      DB_HOST: db
+      DB_PORT: 5432
     volumes:
       - ./api:/var/www/html
-    working_dir: /var/www/html
-    environment:
-      APP_ENV: local
-      APP_DEBUG: true
-      APP_KEY: base64:SomeAppKeyHere
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: lighthouse
-      DB_USERNAME: root
-      DB_PASSWORD: secret
-    depends_on:
-      - db
-
-  db:
-    image: mysql:8.0
-    container_name: lighthouse-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: secret
-      MYSQL_DATABASE: lighthouse
+      - api_vendor:/var/www/html/vendor
     ports:
-      - "3306:3306"
+      - "8000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lighthouse_frontend
+    environment:
+      # Pass Vite variables from api/.env
+      VITE_API_URL: http://localhost:8000
+      VITE_PORT: 5173
+      VITE_APP_NAME: "Project Lighthouse"
+      VITE_DEBUG_API: false
+
+      # Docker flag for internal service communication
+      DOCKER_ENV: "true"
     volumes:
-      - dbdata:/var/lib/mysql
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5173 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
-  dbdata:
+  postgres_data:
+    driver: local
+  api_vendor:
+    driver: local
+  frontend_node_modules:
+    driver: local
